@@ -8,7 +8,7 @@ class EntryPoint:
         unit = str(subprocess.run(['uname', '-n'], stdout=subprocess.PIPE).stdout, 'utf-8').rstrip()
         print("Running on node: " + unit)
 
-        self.path = str(subprocess.run(['pwd'], stdout=subprocess.PIPE).stdout, 'utf-8').rstrip()
+        self.path = os.path.dirname(__file__)
 
         self.argp = ArgumentParser(description="Automation entry point")
         self.argp.add_argument('-p', '--pid', help="PID file path")

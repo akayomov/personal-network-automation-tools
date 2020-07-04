@@ -6,13 +6,13 @@ export PATH=/opt/sbin:/opt/bin:$PATH
 export LANG="ru_RU.UTF-8"
 export LC_ALL="ru_RU.UTF-8"
 export HOME=/opt/root
-export INSTALL_STEP="/opt/etc/flash_done_step"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 unset LD_BIND_NOW
 unset TZ
 
-#flash_file="$0"
+INSTALL_STEP="/opt/etc/flash_done_step"
+FLASH_FILE=$0
 
 if [ -f $INSTALL_STEP ]; then
 	start_step="$(cut -d' ' -f1 $INSTALL_STEP)"
@@ -52,6 +52,7 @@ install_package(){
 	else
 		sleep 1 & logger -p 3 -t flash "|    >> Installation failed for: $1"
 		sleep 1 & logger -p 3 -t flash "log: $install_log"
+		kill $holder_pid
 		exit 1
 	fi
 
@@ -110,6 +111,7 @@ if [ "$start_step" -lt "3" ]; then
 		sleep 1 & logger -t flash "|    >> Dropbear RSA-KEY generated successfully"
 	else
 		sleep 1 & logger -p 3 -t flash "|    >> Dropbear RSA-KEY generation failed"
+		kill $holder_pid
 		exit 1
 	fi
 	kill $holder_pid
@@ -144,7 +146,14 @@ if [ "$start_step" -lt "4" ]; then
 	sleep 1 & logger -t flash 'STEP: Installing GIT'
 
 	update_packages
-	install_package dropbear
+	install_package git
+
+	if [ -d "/opt/personal-network-automation-tools" ]; then
+		sleep 1 & logger -t flash "|    >> Cleanup existing repo directory"
+		chown -R root:root /opt/personal-network-automation-tools
+		chmod -R uog+rwx /opt/personal-network-automation-tools
+		rm -rf /opt/personal-network-automation-tools
+	fi
 
 	holder.sh "Cloning repository" &
 	holder_pid=$!
@@ -156,6 +165,7 @@ if [ "$start_step" -lt "4" ]; then
 	else
 		sleep 1 & logger -p 3 -t flash "|    >> Repository cloning failed"
 		sleep 1 & logger -p 3 -t flash "log: $clone_log"
+		kill $holder_pid
 		exit 1
 	fi
 
@@ -163,7 +173,7 @@ if [ "$start_step" -lt "4" ]; then
 	branch_status=$?
 	if [ $branch_status -eq "0" ]; then
 		sleep 1 & logger -p 4 -t flash "|    >> Switching branch to $branch"
-		switch_log=$(cd /opt/personal-network-automation-tools && git checkout "$branch" 2>&1)
+		switch_log=$(cd /opt/personal-network-automation-tools && git switch "$branch" 2>&1)
 		switch_status=$?
 		if [ $switch_status -eq "0" ]; then
 			sleep 1 & logger -t flash "|    >> Switched successfully"
@@ -197,7 +207,7 @@ automation_status() {
 }
 
 start() {
-	$APP --pid $PID
+	python3 $APP --pid $PID
 }
 
 stop() {
@@ -232,10 +242,11 @@ case "$1" in
 		start
 		;;
 	*)
-		echo "Usage: $0 {start|stop|restart|status}
+		echo "Usage: $0 {start|stop|restart|status}"
 		;;
 esac
 EOF
+	chmod +x /opt/etc/init.d/S100Automation
 
 	if /opt/etc/init.d/S100Automation start; then
 		sleep 1 & logger -t flash "|    >> Automation service (re)started successfully"
@@ -247,3 +258,23 @@ EOF
 	echo "5 step_automation" > $INSTALL_STEP
 	sleep 1 & logger -t flash 'DONE: Automation is up and running'
 fi
+
+############################################### 6 FINAL ADJUST AND CLEANUP #############################################
+sleep 5
+if [ "$start_step" -lt "6" ]; then
+	sleep 1 & logger -t flash 'STEP: Final adjust and cleanup'
+
+	update_packages
+	install_package nano tmux
+
+	new_profile=$(sed "s/alias mc=.*/alias ll=\"echo -e '\\\\e[1;4mRights          User     Group       Size  Date  Time    Name\\\\e[0m' \&\& ls -lAhpX --group-directories-first\"/g" /opt/etc/profile)
+	echo "$new_profile" > /opt/etc/profile
+
+	sleep 1 & logger -t flash "|    >> Remove installation scripts"
+	rm /opt/bin/holder.sh
+	rm $INSTALL_STEP
+	rm "$FLASH_FILE"
+	sleep 1 & logger -t flash 'FINALLY EVERYTHING IS UP AND RUNNING. BYE BYE'
+	exit 0
+fi
+
