@@ -270,6 +270,9 @@ if [ "$start_step" -lt "6" ]; then
 	new_profile=$(sed "s/alias mc=.*/alias ll=\"echo -e '\\\\e[1;4mRights          User     Group       Size  Date  Time    Name\\\\e[0m' \&\& ls -lAhpX --group-directories-first\"/g" /opt/etc/profile)
 	echo "$new_profile" > /opt/etc/profile
 
+	ndmq -p "opkg initrc /opt/etc/init.d/rc.unslung"
+	ndmq -p "system configuration save"
+
 	sleep 1 & logger -t flash "|    >> Remove installation scripts"
 	rm /opt/bin/holder.sh
 	rm $INSTALL_STEP
