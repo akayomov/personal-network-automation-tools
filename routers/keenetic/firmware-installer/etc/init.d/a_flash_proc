@@ -44,13 +44,13 @@ install_package(){
 	holder.sh "Package '$1' installation continues" &
 	holder_pid=$!
 
-	install_log=$(opkg -V2 install $1)
+	install_log=$(opkg -V2 install "$1")
 	install_status=$?
 
 	if [ $install_status -eq "0" ]; then
-		sleep 1 & logger -t flash "|    >> Installation succeeded for: $1..."
+		sleep 1 & logger -t flash "|    >> Installation succeeded for: $1"
 	else
-		sleep 1 & logger -p 3 -t flash "|    >> Installation failed for: $1..."
+		sleep 1 & logger -p 3 -t flash "|    >> Installation failed for: $1"
 		sleep 1 & logger -p 3 -t flash "log: $install_log"
 		exit 1
 	fi
@@ -60,13 +60,13 @@ install_package(){
 
 ############################################### 1 PREPARING DIRECTORIES ################################################
 if [ "$start_step" -lt "1" ]; then
-	sleep 1 & logger -t flash 'STEP: Preparing directories...'
+	sleep 1 & logger -t flash 'STEP: Preparing directories'
 
 	for folder in lib/opkg tmp var/lock root/.ssh etc/init.d; do
 		if mkdir -p /opt/$folder ; then
-			sleep 1 & logger -t flash "|    >> Creation succeeded for: /opt/$folder..."
+			sleep 1 & logger -t flash "|    >> Creation succeeded for: /opt/$folder"
 		else
-			sleep 1 & logger -p 3 -t flash "|    >> Creation failed for: /opt/$folder..."
+			sleep 1 & logger -p 3 -t flash "|    >> Creation failed for: /opt/$folder"
 			exit 1
 		fi
 	done
@@ -78,10 +78,10 @@ fi
 ############################################### 2 INSTALLING PACKAGES ##################################################
 sleep 5
 if [ "$start_step" -lt "2" ]; then
-	sleep 1 & logger -t flash 'STEP: Installing initial packages...'
+	sleep 1 & logger -t flash 'STEP: Installing initial packages'
 
 	update_packages
-	for package in opt-ndmsv2 ndmq entware-release findutils poorbox busybox do install_package $package; done
+	for package in opt-ndmsv2 ndmq entware-release findutils poorbox busybox; do install_package $package; done
 
 	if ldconfig > /dev/null 2>&1 ; then
 		sleep 1 & logger -t flash "|    >> LDCONFIG executed successfully"
@@ -99,7 +99,7 @@ fi
 ############################################### 3 CONFIGURING SSH ACCESS ###############################################
 sleep 5
 if [ "$start_step" -lt "3" ]; then
-	sleep 1 & logger -t flash 'STEP: Configuring SSH...'
+	sleep 1 & logger -t flash 'STEP: Configuring SSH'
 
 	update_packages
 	install_package dropbear
@@ -115,14 +115,16 @@ if [ "$start_step" -lt "3" ]; then
 	kill $holder_pid
 
 	password=$(cat /storage/root.password)
+	password_status=$?
 
-	if [ $? -eq "0" ]; then
+	if [ $password_status -eq "0" ]; then
 		sleep 1 & logger -p 4 -t flash "|    >> Password for ROOT will be set from /storage/root.password file"
 	else
 		sleep 1 & logger -p 4 -t flash "|    >> File /storage/root.password is missing. ROOT will go unsecured with default password 'keenetic'"
 		password="keenetic"
 	fi
 
+	# shellcheck disable=SC2039
 	echo -e "$password\n$password" | passwd root
 
 	if /opt/etc/init.d/S51dropbear stop & /opt/etc/init.d/S51dropbear start ; then
@@ -139,11 +141,13 @@ fi
 ############################################### 4 CONFIGURING GIT REPOSITORY ###########################################
 sleep 5
 if [ "$start_step" -lt "4" ]; then
-	sleep 1 & logger -t flash 'STEP: Installing GIT...'
+	sleep 1 & logger -t flash 'STEP: Installing GIT'
 
 	update_packages
 	install_package dropbear
 
+	holder.sh "Cloning repository" &
+	holder_pid=$!
 	clone_log=$(cd /opt && git clone $REPOSITORY)
 	clone_status=$?
 
@@ -159,7 +163,7 @@ if [ "$start_step" -lt "4" ]; then
 	branch_status=$?
 	if [ $branch_status -eq "0" ]; then
 		sleep 1 & logger -p 4 -t flash "|    >> Switching branch to $branch"
-		switch_log=$(cd /opt/personal-network-automation-tools && git checkout $branch 2>&1)
+		switch_log=$(cd /opt/personal-network-automation-tools && git checkout "$branch" 2>&1)
 		switch_status=$?
 		if [ $switch_status -eq "0" ]; then
 			sleep 1 & logger -t flash "|    >> Switched successfully"
@@ -168,7 +172,78 @@ if [ "$start_step" -lt "4" ]; then
 			sleep 1 & logger -p 3 -t flash "log: $switch_log"
 		fi
 	fi
+	kill $holder_pid
 
 	echo "4 step_repository" > $INSTALL_STEP
 	sleep 1 & logger -t flash 'DONE: GIT installed and configured'
+fi
+
+############################################### 5 CONFIGURING AUTOMATION ###############################################
+sleep 5
+if [ "$start_step" -lt "5" ]; then
+	sleep 1 & logger -t flash 'STEP: Preparing automation to work'
+
+	update_packages
+	install_package python3
+
+	cat <<'EOF' >>/opt/etc/init.d/S100Automation
+#!/bin/sh
+PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+PID=/opt/tmp/automation.pid
+APP=/opt/personal-network-automation-tools/entrypoint.py
+
+automation_status() {
+	[ -f $PID ] && [ -d /proc/`cat $PID` ]
+}
+
+start() {
+	$APP --pid $PID
+}
+
+stop() {
+	kill `cat $PID`
+}
+
+case "$1" in
+	start)
+		if automation_status; then
+			echo "Automation already running"
+		else
+			start
+		fi
+		;;
+	stop)
+		if automation_status; then
+			stop
+		else
+			echo "Automation is not running"
+		fi
+		;;
+	status)
+		if automation_status; then
+			echo "Automation is running"
+		else
+			echo "Automation isn't running"
+		fi
+		;;
+	restart)
+		stop
+		sleep 3
+		start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|status}
+		;;
+esac
+EOF
+
+	if /opt/etc/init.d/S100Automation start; then
+		sleep 1 & logger -t flash "|    >> Automation service (re)started successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> Automation service (re)start failed"
+		exit 1
+	fi
+
+	echo "5 step_automation" > $INSTALL_STEP
+	sleep 1 & logger -t flash 'DONE: Automation is up and running'
 fi
