@@ -1,0 +1,3 @@
+#!/opt/bin/sh
+
+source /opt/etc/init.d/a_flash_proc

@@ -1,0 +1,174 @@
+#!/opt/bin/sh
+
+export REPOSITORY="git://github.com/akayomov/personal-network-automation-tools.git"
+
+export PATH=/opt/sbin:/opt/bin:$PATH
+export LANG="ru_RU.UTF-8"
+export LC_ALL="ru_RU.UTF-8"
+export HOME=/opt/root
+export INSTALL_STEP="/opt/etc/flash_done_step"
+unset LD_LIBRARY_PATH
+unset LD_PRELOAD
+unset LD_BIND_NOW
+unset TZ
+
+#flash_file="$0"
+
+if [ -f $INSTALL_STEP ]; then
+	start_step="$(cut -d' ' -f1 $INSTALL_STEP)"
+else
+	echo "0 initiating" > $INSTALL_STEP
+	start_step="0"
+fi
+
+############################################### 0 FUNCTIONS ############################################################
+
+update_packages(){
+	sleep 1 & logger -t flash "|    >> Updating OPKG"
+
+	update_log="$(opkg update 2>&1)"
+	update_status=$?
+
+	if [ $update_status -eq "0" ]; then
+		sleep 1 & logger -t flash "|    >> OPKG updated successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> OPKG update failed"
+		sleep 1 & logger -p 3 -t flash "log: $update_log"
+		exit 1
+	fi
+}
+
+install_package(){
+	sleep 1 & logger -t flash "|    >> Installing '$1' package"
+
+	holder.sh "Package '$1' installation continues" &
+	holder_pid=$!
+
+	install_log=$(opkg -V2 install $1)
+	install_status=$?
+
+	if [ $install_status -eq "0" ]; then
+		sleep 1 & logger -t flash "|    >> Installation succeeded for: $1..."
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> Installation failed for: $1..."
+		sleep 1 & logger -p 3 -t flash "log: $install_log"
+		exit 1
+	fi
+
+	kill $holder_pid
+}
+
+############################################### 1 PREPARING DIRECTORIES ################################################
+if [ "$start_step" -lt "1" ]; then
+	sleep 1 & logger -t flash 'STEP: Preparing directories...'
+
+	for folder in lib/opkg tmp var/lock root/.ssh etc/init.d; do
+		if mkdir -p /opt/$folder ; then
+			sleep 1 & logger -t flash "|    >> Creation succeeded for: /opt/$folder..."
+		else
+			sleep 1 & logger -p 3 -t flash "|    >> Creation failed for: /opt/$folder..."
+			exit 1
+		fi
+	done
+
+	echo "1 step_directories" > $INSTALL_STEP
+	sleep 1 & logger -t flash 'DONE: Directories created'
+fi
+
+############################################### 2 INSTALLING PACKAGES ##################################################
+sleep 5
+if [ "$start_step" -lt "2" ]; then
+	sleep 1 & logger -t flash 'STEP: Installing initial packages...'
+
+	update_packages
+	for package in opt-ndmsv2 ndmq entware-release findutils poorbox busybox do install_package $package; done
+
+	if ldconfig > /dev/null 2>&1 ; then
+		sleep 1 & logger -t flash "|    >> LDCONFIG executed successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> LDCONFIG execution failed"
+		exit 1
+	fi
+
+	chmod 777 /opt/tmp
+
+	echo "2 step_packages" > $INSTALL_STEP
+	sleep 1 & logger -t flash 'DONE: Base packages installed'
+fi
+
+############################################### 3 CONFIGURING SSH ACCESS ###############################################
+sleep 5
+if [ "$start_step" -lt "3" ]; then
+	sleep 1 & logger -t flash 'STEP: Configuring SSH...'
+
+	update_packages
+	install_package dropbear
+
+	holder.sh "Generating dropbear RSA-KEY" &
+	holder_pid=$!
+	if dropbearkey -t rsa -f /opt/root/.ssh/id_dropbear > /dev/null 2>&1; then
+		sleep 1 & logger -t flash "|    >> Dropbear RSA-KEY generated successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> Dropbear RSA-KEY generation failed"
+		exit 1
+	fi
+	kill $holder_pid
+
+	password=$(cat /storage/root.password)
+
+	if [ $? -eq "0" ]; then
+		sleep 1 & logger -p 4 -t flash "|    >> Password for ROOT will be set from /storage/root.password file"
+	else
+		sleep 1 & logger -p 4 -t flash "|    >> File /storage/root.password is missing. ROOT will go unsecured with default password 'keenetic'"
+		password="keenetic"
+	fi
+
+	echo -e "$password\n$password" | passwd root
+
+	if /opt/etc/init.d/S51dropbear stop & /opt/etc/init.d/S51dropbear start ; then
+		sleep 1 & logger -t flash "|    >> Dropbear service (re)started successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> Dropbear service (re)start failed"
+		exit 1
+	fi
+
+	echo "3 step_dropbear" > $INSTALL_STEP
+	sleep 1 & logger -t flash 'DONE: SSH installed and configured'
+fi
+
+############################################### 4 CONFIGURING GIT REPOSITORY ###########################################
+sleep 5
+if [ "$start_step" -lt "4" ]; then
+	sleep 1 & logger -t flash 'STEP: Installing GIT...'
+
+	update_packages
+	install_package dropbear
+
+	clone_log=$(cd /opt && git clone $REPOSITORY)
+	clone_status=$?
+
+	if [ $clone_status -eq "0" ]; then
+		sleep 1 & logger -t flash "|    >> Repository cloned successfully"
+	else
+		sleep 1 & logger -p 3 -t flash "|    >> Repository cloning failed"
+		sleep 1 & logger -p 3 -t flash "log: $clone_log"
+		exit 1
+	fi
+
+	branch=$(cat /storage/automation.branch 2>&1)
+	branch_status=$?
+	if [ $branch_status -eq "0" ]; then
+		sleep 1 & logger -p 4 -t flash "|    >> Switching branch to $branch"
+		switch_log=$(cd /opt/personal-network-automation-tools && git checkout $branch 2>&1)
+		switch_status=$?
+		if [ $switch_status -eq "0" ]; then
+			sleep 1 & logger -t flash "|    >> Switched successfully"
+		else
+			sleep 1 & logger -p 3 -t flash "|    >> Switch to branch $branch failed"
+			sleep 1 & logger -p 3 -t flash "log: $switch_log"
+		fi
+	fi
+
+	echo "4 step_repository" > $INSTALL_STEP
+	sleep 1 & logger -t flash 'DONE: GIT installed and configured'
+fi
