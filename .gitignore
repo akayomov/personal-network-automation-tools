@@ -1,2 +1,6 @@
 .idea/
 __pycache__
+
+/routers/keenetic/firmware-installer/core.firmware.tar.gz
+/routers/keenetic/data/*
+!/routers/keenetic/data/.keep

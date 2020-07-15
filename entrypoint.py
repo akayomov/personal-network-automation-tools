@@ -22,9 +22,8 @@ class EntryPoint:
         selector.get(unit, self.unknown)()
 
     def keenetic_router(self):
-        runner = self.path+"/routers/keenetic/runner.py"
-        process = subprocess.Popen(['python3', runner], cwd=self.path, stdout=subprocess.PIPE)
-        print("KeeneticRunner: service started with pid '"+str(process.pid)+"'")
+        process = subprocess.Popen(['python3', '-m', 'keenetic'], cwd=self.path+"/routers/", stdout=subprocess.PIPE)
+        print("Service started with pid '"+str(process.pid)+"'")
         if self.argv.pid:
             open(self.argv.pid, 'w').write(str(process.pid))
 

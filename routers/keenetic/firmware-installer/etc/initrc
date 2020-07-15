@@ -1,3 +1,11 @@
 #!/opt/bin/sh
 
-source /opt/etc/init.d/a_flash_proc
+if [ -f /opt/etc/init.d/a_flash_proc ];then
+	# shellcheck disable=SC2039
+	source /opt/etc/init.d/a_flash_proc
+fi
+
+if [ -f /opt/etc/init.d/rc.unslung ];then
+	# shellcheck disable=SC2039
+	source /opt/etc/init.d/rc.unslung
+fi
