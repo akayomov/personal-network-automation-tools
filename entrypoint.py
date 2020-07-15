@@ -1,18 +1,13 @@
 import os
 import subprocess
 from argparse import ArgumentParser
+from routers.keenetic.status.collector import StatusCollector
 
 
 class EntryPoint:
     def __init__(self):
         unit = str(subprocess.run(['uname', '-n'], stdout=subprocess.PIPE).stdout, 'utf-8').rstrip()
         print("Running on node: " + unit)
-
-        self.path = os.path.dirname(__file__)
-
-        self.argp = ArgumentParser(description="Automation entry point")
-        self.argp.add_argument('-p', '--pid', help="PID file path")
-        self.argv = self.argp.parse_args()
 
         selector = {
             'nibiru': self.keenetic_router,
@@ -21,11 +16,30 @@ class EntryPoint:
 
         selector.get(unit, self.unknown)()
 
-    def keenetic_router(self):
-        process = subprocess.Popen(['python3', '-m', 'keenetic'], cwd=self.path+"/routers/", stdout=subprocess.PIPE)
-        print("Service started with pid '"+str(process.pid)+"'")
-        if self.argv.pid:
-            open(self.argv.pid, 'w').write(str(process.pid))
+    @staticmethod
+    def keenetic_router():
+        path = os.path.dirname(__file__)
+
+        argp = ArgumentParser(description="Automation entry point")
+
+        argp.add_argument('-p', '--pid', help="PID file path")
+        argp.add_argument('--service', help="Run a service", action='store_true')
+        argp.add_argument('--status', help="Get a router status", action='store_true')
+
+        argv = argp.parse_args()
+
+        if argv.service:
+            process = subprocess.Popen(['python3', '-m', 'keenetic'], cwd=path+"/routers/", stdout=subprocess.PIPE)
+            print("Service started with pid '"+str(process.pid)+"'", end="")
+            if argv.pid:
+                open(argv.pid, 'w').write(str(process.pid))
+                print(", pidfile:", argv.pid)
+            else:
+                print()
+        elif argv.status:
+            StatusCollector()
+        else:
+            print("Execution ignored, use --service to start service, or --status to see status.")
 
     @staticmethod
     def unknown():
