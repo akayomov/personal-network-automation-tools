@@ -35,15 +35,26 @@ class StatusCollector:
     @staticmethod
     def rci(url: str):
         log('  Requesting RCI:', url)
+        success = False
         response = None
-        try:
-            response = requests.get("http://localhost:79/rci" + url).json()
-        except ConnectionError:
-            warn("Connection error happened during request to router")
-        except HTTPError:
-            warn("HTTP error happened during request to router")
-        finally:
-            return response
+        for iteration in range(1, 6):
+            log('  attempting:', iteration)
+            try:
+                response = requests.get("http://localhost:79/rci" + url).json()
+                success = True
+                break
+            except ConnectionError:
+                warn("Connection error happened during request to router")
+                time.sleep(2)
+            except HTTPError:
+                warn("HTTP error happened during request to router")
+                time.sleep(2)
+            except IOError:
+                warn("IO error happened during request to router")
+                time.sleep(2)
+        if not success:
+            raise Exception("Continuous error happened during request to router")
+        return response
 
     def process(self, action, status):
         log('Processing collected status with action:', action)
