@@ -34,7 +34,7 @@ class StatusCollector:
 
     @staticmethod
     def rci(url: str):
-        log('Requesting RCI:', url)
+        log('  Requesting RCI:', url)
         response = None
         try:
             response = requests.get("http://localhost:79/rci" + url).json()
@@ -54,19 +54,24 @@ class StatusCollector:
                                                 'data',
                                                 time.strftime("%Y_%m_%d", t) + ".json"))
             if os.path.exists(path):
+                log('  File exists. Reading it:', path)
                 log_data = json.loads(open(path, 'r').read())
             else:
+                log("  File doesn't exists. Starting from scratch", path)
                 log_data = {}
 
             if not str(t.tm_hour) in log_data:
+                log("  Hour missing in data:", str(t.tm_hour))
                 log_data[str(t.tm_hour)] = {}
             if not str(t.tm_min) in log_data[str(t.tm_hour)]:
+                log("  Minute missing in data:", str(t.tm_min))
                 log_data[str(t.tm_hour)][str(t.tm_min)] = {}
             log_data[str(t.tm_hour)][str(t.tm_min)][str(t.tm_sec)] = status
 
+            log("  Current status added to log. saving it...")
             open(path, 'w').write(json.dumps(log_data, indent=4))
 
-            log("Status update saved to file: " + path)
+            log("  Status update saved to file: " + path)
         elif action == "cli":
             CLIDesigner(status)
         elif action == "return":

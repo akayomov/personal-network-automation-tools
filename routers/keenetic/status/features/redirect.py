@@ -43,9 +43,9 @@ class RedirectChecker:
 
         for requirement in config['subnets']:
             if result:
-                occured = False
+                occurred = False
                 for subnet in peer['allow-ips']:
                     if subnet == requirement:
-                        occured = True
-                result = False if occured is not self.config['status'] else True
+                        occurred = True
+                result = False if occurred is not self.config['status'] else True
         return result
