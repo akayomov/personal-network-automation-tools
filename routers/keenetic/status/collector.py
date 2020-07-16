@@ -56,6 +56,7 @@ class StatusCollector:
             if os.path.exists(path):
                 log('  File exists. Reading it:', path)
                 log_data = json.loads(open(path, 'r').read())
+                log("    Current size:", os.path.getsize(path))
             else:
                 log("  File doesn't exists. Starting from scratch", path)
                 log_data = {}
