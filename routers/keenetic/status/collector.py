@@ -16,9 +16,6 @@ from .features.redirect import RedirectChecker
 
 
 class StatusCollector:
-
-    _cache = {}
-
     def __init__(self, action="cli"):
         self.status = None
         self.start_time = time.time()
@@ -40,13 +37,7 @@ class StatusCollector:
         log('Requesting RCI:', url)
         response = None
         try:
-            if url in StatusCollector._cache:
-                log('  found in cache')
-                response = StatusCollector._cache[url]
-            else:
-                log('  requesting subsystem')
-                response = requests.get("http://localhost:79/rci" + url).json()
-                StatusCollector._cache[url] = response
+            response = requests.get("http://localhost:79/rci" + url).json()
         except ConnectionError:
             warn("Connection error happened during request to router")
         except HTTPError:
